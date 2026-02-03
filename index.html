@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Posts - Soft Delete & Auto ID</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; color: white; margin-right: 5px; }
+        .btn-save { background-color: #28a745; }
+        .btn-clear { background-color: #6c757d; }
+        .btn-delete { background-color: #dc3545; padding: 5px 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f8f9fa; }
+        /* CSS cho bài viết đã xoá mềm */
+        .is-deleted { text-decoration: line-through; color: #888; background-color: #fdfdfd; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Quản Lý Bài Viết</h2>
+    
+    <div class="form-group">
+        <label>ID (Tự động tăng):</label>
+        <input type="text" id="txt_id" readonly placeholder="Để trống để tạo mới">
+    </div>
+    <div class="form-group">
+        <label>Tiêu đề:</label>
+        <input type="text" id="txt_title" placeholder="Nhập tiêu đề...">
+    </div>
+    <div class="form-group">
+        <label>Lượt xem:</label>
+        <input type="number" id="txt_views" placeholder="Nhập lượt xem...">
+    </div>
+    
+    <button class="btn-save" onclick="Save()">Lưu Bài Viết</button>
+    <button class="btn-clear" onclick="resetForm()">Làm mới</button>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tiêu đề</th>
+                <th>Views</th>
+                <th>Hành động</th>
+            </tr>
+        </thead>
+        <tbody id="table_body"></tbody>
+    </table>
+</div>
+
+<script>
+    const API_URL = 'http://localhost:3000/posts';
+
+    // 1. HIỂN THỊ DỮ LIỆU (Có gạch ngang nếu bị xoá mềm)
+    async function getData() {
+        try {
+            let res = await fetch(API_URL);
+            let posts = await res.json();
+            let body = document.getElementById('table_body');
+            body.innerHTML = '';
+
+            for (const post of posts) {
+                // Thêm class 'is-deleted' nếu isDeleted là true
+                const rowClass = post.isDeleted ? 'is-deleted' : '';
+                const deleteAction = post.isDeleted 
+                    ? '<span>Đã xoá</span>' 
+                    : `<button class="btn-delete" onclick="Delete('${post.id}')">Xoá</button>`;
+
+                body.innerHTML += `
+                    <tr class="${rowClass}">
+                        <td>${post.id}</td>
+                        <td>${post.title}</td>
+                        <td>${post.views}</td>
+                        <td>${deleteAction}</td>
+                    </tr>`;
+            }
+        } catch (error) {
+            console.error("Lỗi lấy dữ liệu:", error);
+        }
+    }
+
+    // 2. LƯU (TẠO MỚI VỚI ID TỰ TĂNG HOẶC CHỈNH SỬA)
+    async function Save() {
+        let id = document.getElementById('txt_id').value;
+        let title = document.getElementById('txt_title').value;
+        let views = document.getElementById('txt_views').value;
+
+        if (!title || !views) {
+            alert("Vui lòng nhập đầy đủ thông tin!");
+            return;
+        }
+
+        if (id === "") {
+            // --- CHẾ ĐỘ TẠO MỚI: TÍNH TOÁN ID TỰ TĂNG ---
+            let resAll = await fetch(API_URL);
+            let posts = await resAll.json();
+            
+            // Tìm ID lớn nhất hiện tại
+            let maxId = posts.length > 0 ? Math.max(...posts.map(p => parseInt(p.id) || 0)) : 0;
+            let newId = (maxId + 1).toString();
+
+            let res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: newId,
+                    title: title,
+                    views: views,
+                    isDeleted: false // Mặc định là chưa xoá
+                })
+            });
+            if (res.ok) alert("Thêm mới thành công!");
+        } else {
+            // --- CHẾ ĐỘ CHỈNH SỬA ---
+            let res = await fetch(`${API_URL}/${id}`, {
+                method: 'PATCH', // Dùng PATCH để chỉ cập nhật các trường thay đổi
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, views })
+            });
+            if (res.ok) alert("Cập nhật thành công!");
+        }
+        resetForm();
+        getData();
+    }
+
+    // 3. XOÁ MỀM (SOFT DELETE)
+    async function Delete(id) {
+        if (!confirm("Bạn có chắc muốn xoá bài viết này không?")) return;
+
+        // Cập nhật trường isDeleted thành true thay vì xoá khỏi DB
+        let res = await fetch(`${API_URL}/${id}`, {
+            method: 'PATCH',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isDeleted: true })
+        });
+
+        if (res.ok) {
+            getData();
+        }
+    }
+
+    function resetForm() {
+        document.getElementById('txt_id').value = '';
+        document.getElementById('txt_title').value = '';
+        document.getElementById('txt_views').value = '';
+    }
+
+    // Khởi chạy khi mở trang
+    getData();
+</script>
+</body>
+</html>

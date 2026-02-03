@@ -1,0 +1,22 @@
+{
+  "posts": [
+    {
+      "id": "1",
+      "title": "Bài viết mẫu",
+      "views": 100,
+      "isDeleted": false
+    },
+    {
+      "id": "2",
+      "title": "sdasd",
+      "views": "111",
+      "isDeleted": true
+    },
+    {
+      "id": "3",
+      "title": "Bài viết số 2",
+      "views": "20",
+      "isDeleted": true
+    }
+  ]
+}
